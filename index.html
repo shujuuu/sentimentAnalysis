@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <script type="text/javascript" src="/socket.io/socket.io.js"></script>
+    <!-- <script src='https://cdn.jsdelivr.net/npm/p5'></script> -->
+    <title>Speech to Text</title>
+</head>
+<style>
+    * {
+        padding: 0;
+        margin: 0;
+    }
+
+    #visualizeTxt {
+        font-size: 50px;
+    }
+
+    p {
+        font-size: 18px;
+    }
+
+    .txtCenter {
+        text-align: center;
+    }
+
+    #container {
+        max-width: 640px;
+        margin: 15% auto;
+    }
+
+    #calculation {
+        color: light-gray;
+    }
+
+    .spanWord {
+        padding: 0 10px;
+    }
+</style>
+
+<body id='bg' class='txtCenter'>
+    <div id='container' class='txtCenter'>
+        <p>Be careful of your words</p>
+        <div style='margin:50px 0'>
+            <h1 id='visualizeTxt'></h1>
+            <p id='calculation'><span class='spanWord'></span></p>
+        </div>
+        <p id='analysis'></p>
+        <p id='score'></p>
+    </div>
+</body>
+<script>
+    //reference: https://codeburst.io/html5-speech-recognition-api-670846a50e92
+    //1. analyze speech to text
+    window.SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
+
+    if ('SpeechRecognition' in window) {
+        // speech recognition API supported
+        console.log("supported");
+    } else {
+        // speech recognition API not supported
+        console.log("nooooo");
+    }
+
+    //create a new speech recognition object.
+    const recognition = new window.SpeechRecognition();
+
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 15;
+    recognition.continuous = true;
+    recognition.lang = "en" //or 'zh-tw'
+
+    let visualizeTxt = document.getElementById('visualizeTxt');
+    let bg = document.getElementById('bg');
+    let analysis = document.getElementById('analysis');
+    let calculation = document.getElementById('calculation');
+    let score = document.getElementById('score');
+
+    //ask user to allow the page to have access to the microphone
+    recognition.onresult = (event) => {
+        //detect single
+        // const speechToText = event.results[0][0].transcript;
+        // console.log(event);
+
+        //detect multiple
+        let interimTranscript = "";
+        let finalTranscript = "";
+        for (let i = event.resultIndex, len = event.results.length; i < len; i++) {
+            let transcript = event.results[i][0].transcript;
+            // console.log(event.results[i].isFinal)
+            if (event.results[i].isFinal == true) {
+                finalTranscript += transcript;
+                // console.log('final: ' + finalTranscript);
+                sendTranscript(finalTranscript);
+            } else {
+                interimTranscript += transcript;
+                // console.log('interim: ' + interimTranscript);
+                // sendTranscript(interimTranscript);
+            }
+        }
+        //put transcript in html
+        visualizeTxt.innerHTML = finalTranscript + '<i style="color:#ddd;">' + interimTranscript +
+            '</>';
+    }
+    recognition.start();
+
+
+    //socket
+    var socket = io.connect();
+
+    socket.on('connect', function () {
+        console.log("Connected");
+    });
+
+    var sendTranscript = function (transcript) {
+        socket.emit("sendTranscript", transcript);
+        // console.log(transcript);
+    };
+
+    socket.on('result', data => {
+        // console.log(data);
+        // let test = '{"wish":1}{"careful":2}';
+        let calc = data.calculation;
+        let spanWord = document.getElementById('spanWord');
+        let calcWordArray = [];
+        // let sampleword = '{"no":-1}{"wish":1}{"careful":2}{"bad":-4}';
+        while (calculation.firstChild) {
+            calculation.removeChild(calculation.firstChild);
+        }
+        console.log(calc);
+        if (calc != null) {
+            calc.forEach((element, index, array) => {
+                let calcJSON = JSON.stringify(data.calculation[index]);
+                // console.log(calcJSON);
+                // let objRegExp = /["]\w+["][:]\d+/;
+                let objRegExp = /["]\w+["][:][-]?\d+/;
+                let cleanCalc = calcJSON.match(objRegExp);
+                console.log(cleanCalc);
+                // calcWordArray.push(cleanCalc);
+
+                //create spanWord
+                let spanWord = document.createElement('span');
+                let nodeWord = document.createTextNode(cleanCalc);
+
+                spanWord.classList.add('spanWord');
+                spanWord.appendChild(nodeWord);
+                calculation.appendChild(spanWord);
+
+                // spanWord.innerHTML = calcWordArray;
+            })
+        } else {
+            spanWord.innerHTML = 'no word to analyze';
+        }
+
+        // })
+        if (data.score < "0") {
+            // bg.style.backgroundColor = 'red';
+            // visualizeTxt.style.color = 'red';
+            analysis.style.color = 'red';
+            analysis.innerHTML = 'negative phrase';
+        } else if (data.score > "0") {
+            // bg.style.backgrounColor = 'white';
+            // visualizeTxt.style.color = 'green';
+            analysis.style.color = 'green';
+            analysis.innerHTML = 'positive phrase';
+        } else {
+            analysis.style.color = 'grey';
+            analysis.innerHTML = 'neutral phrase';
+        }
+    });
+</script>
+
+</html>
