@@ -38,37 +38,38 @@ var sentiment = new Sentiment();
 var connected = false;
 var SerialPort = require('serialport');
 var serialPort = new SerialPort("/dev/cu.usbmodem14101", {
-    baudRate: 9600
-});
-// var Readline = SerialPort.parsers.Readline;
-// var parser = new Readline();
+    baudRate: 9600,
+    dataBits: 8,
+    parity: 'none',
+    stopBits: 1,
+    flowControl: false,
+    hupcl: false
+}, false);
+var Readline = SerialPort.parsers.Readline;
+var parser = new Readline();
 
 serialPort.on("open", function () {
     console.log("serial port open & connected");
 });
 
-let webSocketServer = require('ws').Server;
+// let webSocketServer = require('ws').Server;
 // WebSocket Portion
 var io = require('socket.io').listen(httpServer);
 // var five = require("johnny-five");
 // var board = new five.Board();
-let overwrite = 'quarantine zoom distancing isolation corona covid 19';
+
 let options = {
-    language: 'en',
     extras: {
-        'cats': 5,
-        'quarantine': -5,
-        'zoom': -3,
-        'distancing': -10,
-        'isolation': -2,
-        'covid': -1,
+        'quarantine': -2,
+        'corona': -2,
         '19': -1,
-        'lockdown': -5
+        'quarantine': -4,
+        'isolation': -3,
+        'distancing': -5,
+        'lockdown': -4
     }
 };
 
-//add new language
-// sentiment.registerLanguage(languageCode, language)
 
 io.sockets.on('connection',
     // We are given a websocket object in our function
@@ -76,7 +77,6 @@ io.sockets.on('connection',
         console.log("We have a new client: " + socket.id);
 
         socket.on('sendTranscript', function (data) {
-
             // console.log("Received: " + data);
             var result = sentiment.analyze(data, options);
             console.log(result.score); //total score
@@ -89,11 +89,12 @@ io.sockets.on('connection',
 
             //option1: for local server only, send data
             socket.emit('result', result);
-
+            let signal = 1;
             if (result.score < "0") {
-                console.log('bad result');
-                let signalArduino = 1;
-                serialPort.write(signalArduino.toString());
+                console.log('knock nowww');
+                serialPort.write(signal.toString());
+
+
                 // serialPort.write(52);
 
                 //johnny five
@@ -114,7 +115,7 @@ io.sockets.on('connection',
                 // });
 
             } else {
-                console.log('mehhhh');
+                console.log('all good, do nothing');
             }
 
             //option 2: for node server by anthony
